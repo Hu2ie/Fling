@@ -1,2 +1,4 @@
-*.c linguist-detectable=true
-*.h linguist-detectable=true
+* linguist-vendored
+* linguist-generated
+*.c linguist-vendored=false linguist-generated=false linguist-detectable=true
+*.h linguist-vendored=false linguist-generated=false linguist-detectable=true
