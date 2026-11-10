@@ -18,7 +18,6 @@
 
 #include "fling_art.h"
 
-/* ---------- colors ---------- */
 #define C_RESET   "\x1b[0m"
 #define C_PINK    "\x1b[95m"
 #define C_ORANGE  "\x1b[91m"
@@ -28,13 +27,11 @@
 #define C_DIM     "\x1b[90m"
 #define C_WHITE   "\x1b[97m"
 
-/* ---------- scan_file() return codes ---------- */
 #define SCAN_WORD     1
 #define SCAN_HIDDEN   2
 #define SCAN_ERR_OOM  (-1)
 #define SCAN_ERR_IO   (-2)
 
-/* ---------- dynamic line buffer ---------- */
 typedef struct {
     char  *data;
     size_t len, cap;
@@ -53,7 +50,6 @@ static int line_append(Line *l, char c) {
     return 1;
 }
 
-/* ---------- UTF-8 path -> FILE* (Windows-safe) ---------- */
 static FILE *open_utf8(const char *path) {
     wchar_t wpath[MAX_PATH];
     int n = MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, MAX_PATH);
@@ -61,7 +57,6 @@ static FILE *open_utf8(const char *path) {
     return _wfopen(wpath, L"rb");
 }
 
-/* ---------- ASCII-only case-insensitive substring search ---------- */
 static const char *ci_strstr_ascii(const char *hay, const char *needle) {
     if (!*needle) return hay;
     for (; *hay; ++hay) {
@@ -75,9 +70,7 @@ static const char *ci_strstr_ascii(const char *hay, const char *needle) {
     return NULL;
 }
 
-/* ---------- codepoints we consider "hidden / suspicious" ---------- */
 static int is_hidden_cp(unsigned int cp) {
-    /* zero-width & bidi formatting — always suspicious */
     if (cp == 0x200B || cp == 0x200C || cp == 0x200D || cp == 0x2060 ||
         cp == 0xFEFF || cp == 0x00AD ||
         (cp >= 0x200B && cp <= 0x200F) ||
@@ -86,17 +79,12 @@ static int is_hidden_cp(unsigned int cp) {
         (cp >= 0xE0000 && cp <= 0xE007F) ||
         cp == 0x180E || cp == 0x034F)
         return 1;
-    /* non-standard visible spaces — suspicious in plain text, common in typeset */
     if (cp >= 0x2000 && cp <= 0x200A)
         return 1;
     return 0;
 }
 
-/* ---------- decode one UTF-8 codepoint ----------
- * Returns sequence length (1..4), sets *cp.
- * Returns 0 for invalid/overlong/surrogate/>U+10FFFF.
- * Returns -1 if buffer too short (incomplete sequence).
- */
+
 static int utf8_decode(const char *s, size_t len, unsigned int *cp) {
     unsigned char c = (unsigned char)s[0];
     if (c < 0x80) { *cp = c; return 1; }
@@ -124,10 +112,8 @@ static int utf8_decode(const char *s, size_t len, unsigned int *cp) {
     return n;
 }
 
-/* ---------- hidden / non-printable Unicode detection ---------- */
 static int has_hidden_unicode(const char *s, size_t len) {
     size_t i = 0;
-    /* skip UTF-8 BOM at the very start of the line */
     if (len >= 3 && (unsigned char)s[0] == 0xEF &&
                     (unsigned char)s[1] == 0xBB &&
                     (unsigned char)s[2] == 0xBF) {
@@ -151,7 +137,6 @@ static int has_hidden_unicode(const char *s, size_t len) {
     return 0;
 }
 
-/* ---------- print with escaping / annotation of suspicious bytes ---------- */
 static void print_escaped_line(const char *s, size_t len) {
     for (size_t i = 0; i < len; ) {
         unsigned char c = (unsigned char)s[i];
@@ -170,12 +155,6 @@ static void print_escaped_line(const char *s, size_t len) {
     }
     putchar('\n');
 }
-
-/* ---------- shared scanner ----------
- * word == NULL || *word == 0  -> unicode_only forced.
- * Returns bitmask SCAN_WORD | SCAN_HIDDEN, or SCAN_ERR_OOM / SCAN_ERR_IO.
- * Does NOT print final verdicts — caller does.
- */
 static int scan_file(const char *path, const char *word, int unicode_only) {
     if (!word) unicode_only = 1;
 
@@ -233,13 +212,12 @@ static int scan_file(const char *path, const char *word, int unicode_only) {
     return (found_word ? SCAN_WORD : 0) | (found_hidden ? SCAN_HIDDEN : 0);
 }
 
-/* ---------- strip surrounding quotes, clamp, trim trailing space if quoted ---------- */
 static void normalize_path_arg(const char *arg, char *out, size_t outsz) {
     size_t plen = strlen(arg);
     int quoted = 0;
     if (plen >= 2 && (arg[0] == '"' || arg[0] == '\'') && arg[plen-1] == arg[0]) {
         plen -= 2;
-        memmove(out, arg + 1, plen);   /* copy first, then clamp, to avoid memcpy overlap */
+        memmove(out, arg + 1, plen);   
         quoted = 1;
     } else {
         memcpy(out, arg, plen);
@@ -251,7 +229,6 @@ static void normalize_path_arg(const char *arg, char *out, size_t outsz) {
     }
 }
 
-/* ---------- prompt for a word (used by txtscan) ---------- */
 static int prompt_word(char *word, size_t cap) {
     printf(C_ORANGE "[.txt] = " C_RESET);
     fflush(stdout);
@@ -261,7 +238,6 @@ static int prompt_word(char *word, size_t cap) {
     return (int)wl;
 }
 
-/* ---------- commands ---------- */
 static void cmd_txtscan(const char *arg) {
     printf(C_PINK "searching for specific words in a .txt file." C_RESET "\n");
 
@@ -339,13 +315,11 @@ static void cmd_github(void) {
     printf(C_ORANGE "[!] GitHub: " C_WHITE "https://github.com/Hu2ie/Fling" C_RESET "\n");
 }
 
-/* ---------- trim only line endings (keep trailing spaces in args) ---------- */
 static void trim_eol(char *s) {
     size_t n = strlen(s);
     while (n && (s[n-1] == '\n' || s[n-1] == '\r')) s[--n] = 0;
 }
 
-/* ---------- main ---------- */
 int main(void) {
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD mode = 0;
@@ -354,11 +328,9 @@ int main(void) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    /* 1. your ASCII art — colors are embedded in the art itself */
     fputs(ASCII_ART, stdout);
     printf(C_RESET "\n");
 
-    /* 2. welcome */
     printf(C_PINK "Welcome to the " C_ORANGE "Fling" C_PINK " tool." C_RESET "\n");
     printf("Fling is a utility designed for finding specific words within .txt files,\n");
     printf("detecting hidden Unicode characters, and uncovering text concealed\n");
@@ -366,9 +338,7 @@ int main(void) {
 
     printf(C_ORANGE "[!] Project GitHub: " C_WHITE "https://github.com/Hu2ie/Fling" C_RESET "\n");
 
-    /* 3. init steps */
     printf(C_ORANGE "[1]" C_RESET " initializing and loading the DLL...\n");
-    int ok = 1; /* placeholder: hook real DLL load here */
 
     printf(C_ORANGE "[2]" C_RESET " Setting up configs...\n");
     if (!ok) {
@@ -378,14 +348,12 @@ int main(void) {
     printf(C_GREEN "[+]" C_RESET " The program is ready for use\n\n");
     printf(C_ORANGE "[!]" C_RESET " Enter " C_WHITE "\"help\"" C_RESET " to get information about commands.\n\n");
 
-    /* 4. REPL */
     char buf[2048];
     for (;;) {
         printf(C_PINK "Fling " C_ORANGE ">>> " C_RESET);
         fflush(stdout);
 
         if (!fgets(buf, sizeof(buf), stdin)) break;
-        /* drain rest of line if truncated */
         if (!strchr(buf, '\n')) {
             int ch;
             while ((ch = getchar()) != '\n' && ch != EOF) { /* discard */ }
